@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hurudza Nzwisiso - Agricultural Advisory</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    margin: 0; background: #f0f7f0; color: #1a1a1a;
+  }
+  header {
+    background: linear-gradient(135deg, #2e7d32, #66bb6a);
+    color: white; padding: 20px 30px;
+  }
+  header h1 { margin: 0; font-size: 24px; }
+  header p { margin: 4px 0 0; opacity: 0.9; font-size: 13px; }
+  .container { max-width: 900px; margin: 30px auto; padding: 0 20px; }
+  .card {
+    background: white; border-radius: 10px; padding: 24px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 20px;
+  }
+  label { display: block; font-weight: 600; margin-bottom: 8px; }
+  textarea {
+    width: 100%; padding: 12px; border: 1px solid #ccc;
+    border-radius: 6px; font-size: 14px; min-height: 90px;
+    font-family: inherit; resize: vertical;
+  }
+  button {
+    background: #2e7d32; color: white; border: none;
+    padding: 12px 24px; border-radius: 6px; cursor: pointer;
+    font-size: 14px; font-weight: 600; margin-top: 12px;
+  }
+  button:hover { background: #1b5e20; }
+  button:disabled { background: #999; cursor: not-allowed; }
+  .examples button {
+    background: #e8f5e9; color: #2e7d32; padding: 6px 12px;
+    font-size: 12px; margin: 4px 4px 0 0; font-weight: 500;
+  }
+  .examples button:hover { background: #c8e6c9; }
+  .result { margin-top: 16px; }
+  .badge {
+    display: inline-block; padding: 4px 10px; border-radius: 12px;
+    font-size: 12px; font-weight: 600; margin-right: 6px;
+  }
+  .b-green { background: #c8e6c9; color: #1b5e20; }
+  .b-yellow { background: #fff9c4; color: #827717; }
+  .b-red { background: #ffcdd2; color: #b71c1c; }
+  .b-blue { background: #bbdefb; color: #0d47a1; }
+  .advisory {
+    background: #f5f5f5; padding: 12px; border-radius: 6px;
+    white-space: pre-wrap; font-family: 'Courier New', monospace;
+    font-size: 13px; margin-top: 10px;
+  }
+  .pred-bar {
+    height: 8px; background: #e0e0e0; border-radius: 4px;
+    overflow: hidden; margin-top: 4px;
+  }
+  .pred-bar > div { height: 100%; background: #66bb6a; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .stat { background: #fafafa; padding: 10px; border-radius: 6px; }
+  .stat b { display: block; font-size: 11px; color: #666; text-transform: uppercase; }
+  .error { color: #c62828; padding: 10px; background: #ffebee; border-radius: 6px; }
+  .loading { color: #666; font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🌾 Hurudza Nzwisiso</h1>
+  <p>AI-Powered Agricultural Advisory System</p>
+</header>
+
+<div class="container">
+  <div class="card">
+    <label for="query">Ask an agricultural question</label>
+    <textarea id="query" placeholder="e.g., My rice plants have brown spots and are wilting..."></textarea>
+
+    <div class="examples">
+      <button onclick="fillExample(0)">Rice brown spots</button>
+      <button onclick="fillExample(1)">Groundnut stem borer</button>
+      <button onclick="fillExample(2)">Wheat rust treatment</button>
+      <button onclick="fillExample(3)">Tomato yellow leaves</button>
+      <button onclick="fillExample(4)">Soil nutrient deficiency</button>
+    </div>
+
+    <div style="margin-top: 12px;">
+      <button id="analyzeBtn" onclick="analyze()">Analyze</button>
+      <button id="summarizeBtn" onclick="summarize()" style="background:#0277bd;">Summarize</button>
+      <button id="qaBtn" onclick="askQuestion()" style="background:#6a1b9a;">Ask (QA)</button>
+    </div>
+  </div>
+
+  <div id="output"></div>
+</div>
+
+<script>
+const API = "http://127.0.0.1:8000"; // change to your API URL
+
+const examples = [
+  "My rice plants have brown spots and are wilting. The leaves are turning yellow. What should I do?",
+  "How do I control stem borer in groundnut? I found larvae inside the stems.",
+  "What is the best treatment for wheat rust? My wheat crop has orange powdery spots.",
+  "My tomato leaves are yellow and curling. The plants look stunted.",
+  "The soil in my field is very poor. Nitrogen deficiency is visible and the crop is stunted."
+];
+
+function fillExample(i) {
+  document.getElementById("query").value = examples[i];
+}
+
+function showLoading(msg) {
+  document.getElementById("output").innerHTML =
+    `<div class="card loading">⏳ ${msg}</div>`;
+}
+
+function showError(msg) {
+  document.getElementById("output").innerHTML =
+    `<div class="card error">❌ ${msg}</div>`;
+}
+
+function badgeUrgency(level) {
+  const cls = level === 'critical' ? 'b-red' :
+              level === 'moderate' ? 'b-yellow' : 'b-green';
+  return `<span class="badge ${cls}">Urgency: ${level}</span>`;
+}
+
+function badgeCategory(cat) {
+  return `<span class="badge b-blue">${cat}</span>`;
+}
+
+function renderAnalysis(data) {
+  const c = data.classification;
+  const e = data.entities;
+  const u = data.urgency;
+
+  let html = `<div class="card">
+    <h3 style="margin-top:0;">Analysis Result</h3>
+    <div style="margin-bottom:12px;">
+      ${badgeCategory(c.category)}
+      ${badgeUrgency(u.urgency)}
+      <span class="badge b-green">Lang: ${data.language}</span>
+    </div>
+
+    <div class="grid">
+      <div class="stat">
+        <b>Confidence</b>
+        <div>${(c.confidence*100).toFixed(1)}%</div>
+        <div class="pred-bar"><div style="width:${c.confidence*100}%"></div></div>
+      </div>
+      <div class="stat">
+        <b>Sentiment</b>
+        <div>${u.sentiment}</div>
+      </div>
+    </div>
+
+    <h4>Top Predictions</h4>
+    <ul style="margin:0; padding-left:18px; font-size:13px;">`;
+  c.top_predictions.forEach(p => {
+    html += `<li>${p.category} — ${(p.confidence*100).toFixed(1)}%</li>`;
+  });
+  html += `</ul>`;
+
+  // Entities
+  const entityParts = [];
+  if (e.crops.length) entityParts.push(`🌱 Crops: ${e.crops.map(x=>x.name).join(', ')}`);
+  if (e.diseases.length) entityParts.push(`🦠 Diseases: ${e.diseases.join(', ')}`);
+  if (e.pests.length) entityParts.push(`🐛 Pests: ${e.pests.join(', ')}`);
+  if (e.chemicals.length) entityParts.push(`🧪 Chemicals: ${e.chemicals.map(x=>x.name).join(', ')}`);
+  if (e.symptoms.length) entityParts.push(`⚠️ Symptoms: ${e.symptoms.join(', ')}`);
+
+  if (entityParts.length) {
+    html += `<h4>Extracted Entities</h4>
+      <div style="font-size:13px;">${entityParts.join('<br>')}</div>`;
+  }
+
+  html += `<h4>Advisory</h4>
+    <div class="advisory">${escapeHtml(data.advisory)}</div>
+  </div>`;
+
+  document.getElementById("output").innerHTML = html;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, m => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[m]));
+}
+
+async function analyze() {
+  const text = document.getElementById("query").value.trim();
+  if (!text) return showError("Please enter a question.");
+  showLoading("Analyzing...");
+  document.getElementById("analyzeBtn").disabled = true;
+  try {
+    const r = await fetch(`${API}/analyze`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({text})
+    });
+    if (!r.ok) throw new Error(`API error ${r.status}`);
+    const data = await r.json();
+    renderAnalysis(data);
+  } catch (err) {
+    showError(err.message + " — is the API running at " + API + "?");
+  } finally {
+    document.getElementById("analyzeBtn").disabled = false;
+  }
+}
+
+async function summarize() {
+  const text = document.getElementById("query").value.trim();
+  if (!text) return showError("Please enter text to summarize.");
+  showLoading("Summarizing...");
+  try {
+    const r = await fetch(`${API}/summarize`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({text, max_sentences: 2})
+    });
+    const data = await r.json();
+    document.getElementById("output").innerHTML =
+      `<div class="card"><h3>Summary</h3><div class="advisory">${escapeHtml(data.summary)}</div></div>`;
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+async function askQuestion() {
+  const text = document.getElementById("query").value.trim();
+  if (!text) return showError("Please enter a question.");
+  showLoading("Getting answer...");
+  try {
+    const r = await fetch(`${API}/qa`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({question: text})
+    });
+    const data = await r.json();
+    document.getElementById("output").innerHTML =
+      `<div class="card"><h3>Answer</h3>
+        <div class="advisory">${escapeHtml(data.answer)}</div>
+        <p style="font-size:12px;color:#666;">Mode: ${data.mode}</p>
+      </div>`;
+  } catch (err) {
+    showError(err.message);
+  }
+}
+</script>
+</body>
+</html>
